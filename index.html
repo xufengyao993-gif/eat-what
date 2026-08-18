@@ -6,9 +6,18 @@
 <title>今天吃啥 · 上海</title>
 <meta name="description" content="纠结吃什么的时候，随机帮你决定一顿饭，并直接找到附近的店。">
 <meta name="theme-color" content="#ff6b35">
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="manifest" href="manifest.json">
+
+<!-- iOS 装到桌面用的：Safari 不认 SVG 图标，必须给 PNG；
+     apple-mobile-web-app-capable 是 iOS 判断能不能以独立 App 打开的传统开关 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="吃啥">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="assets/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="assets/icon.svg">
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>

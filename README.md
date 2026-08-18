@@ -163,11 +163,13 @@ python3 -m http.server 8000
 
 ```
 index.html              页面结构
-manifest.webmanifest    PWA 配置（添加到主屏幕）
+manifest.json           PWA 配置（添加到主屏幕）
 assets/
   data.js               菜品库、上海商圈、平台跳转链接
   app.js                主逻辑（引导流程、筛选、加权抽取、菜单、记录）
   nearby.js             高德附近搜索（可选，没配 Key 就不加载）
   style.css             样式，含深浅色主题
-  icon.svg              图标
+  icon.svg              图标（浏览器标签页用）
+  apple-touch-icon.png  iOS 桌面图标，Safari 不认 SVG 必须是 PNG
+  icon-192.png / icon-512.png / icon-maskable-512.png
 ```
