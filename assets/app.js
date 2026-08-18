@@ -72,6 +72,7 @@
     filter: loadFilter(),
     last: null,
     rolling: false,
+    mode: load(KEY.mode, 'slot'),   // slot=老虎机  card=翻牌
     geo: null,           // 定位到的 '经度,纬度'
     geoAccurate: false   // 是否来自高德定位（坐标系对得上）
   };
@@ -267,14 +268,113 @@
 
   function syncButtons() {
     const has = !!state.last && !state.rolling;
-    $('#againBtn').disabled = !has;
     $('#eatBtn').disabled = !has;
     $('#rollBtn').disabled = state.rolling;
-    $('#rollBtn').textContent = state.rolling ? '正在挑…' : (state.last ? '再抽一次' : '吃什么？');
+    $('#rollBtn').textContent =
+      state.rolling ? '正在挑…'
+      : state.mode === 'card' ? (state.last ? '再发一次' : '发牌')
+      : (state.last ? '换一个' : '吃什么？');
   }
 
   function buzz(ms) {
     if (navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} }
+  }
+
+  // ---------- 翻牌 ----------
+  let cards = [];        // 这一轮发出去的 3 道
+  let flipped = false;   // 翻开过就不能再改了，不然就成了挑到满意为止
+
+  /** 不重复地抽 n 个（数量不够就有几个给几个） */
+  function pickN(list, n) {
+    const rest = list.slice();
+    const out = [];
+    while (out.length < n && rest.length) {
+      const d = pickFrom(rest);
+      out.push(d);
+      rest.splice(rest.indexOf(d), 1);
+    }
+    return out;
+  }
+
+  function deal() {
+    const list = pool();
+    const box = $('#cards');
+    state.last = null;
+    flipped = false;
+    $('#goEat').hidden = true;
+    $('#myShop').hidden = true;
+
+    if (!list.length) {
+      cards = [];
+      box.innerHTML = '<div class="cards-empty">🤷 这些条件下没有菜了<br>放宽一点再来</div>';
+      syncButtons();
+      return;
+    }
+
+    cards = pickN(list, 3);
+    box.innerHTML = cards.map((d, i) =>
+      '<button class="card" type="button" data-card="' + i + '" aria-label="翻开第 ' + (i + 1) + ' 张">' +
+        '<div class="card-inner">' +
+          '<div class="card-face card-back">🍽️</div>' +
+          '<div class="card-face card-front">' +
+            '<span class="cf-emoji">' + esc(d.e) + '</span>' +
+            '<span class="cf-name">' + esc(d.n) + '</span>' +
+            '<span class="cf-meta">' + esc(d.c) + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</button>').join('');
+    $('#tip').textContent = '挑一张翻开';
+    syncButtons();
+  }
+
+  function flipCard(i) {
+    if (flipped || !cards[i]) return;
+    flipped = true;
+    buzz(15);
+
+    const all = document.querySelectorAll('.card');
+    const win = all[i];
+    win.classList.add('flipped', 'win');
+    all.forEach((c) => { c.disabled = true; });
+
+    state.last = cards[i];
+    syncButtons();
+    renderGoEat();
+    $('#tip').textContent = '另外两张是你没选的';
+
+    // 稍等一下再把没选的翻开，让人先看清自己翻到了什么
+    all.forEach((c, k) => {
+      if (k === i) return;
+      setTimeout(() => c.classList.add('flipped', 'miss'), 420 + k * 90);
+    });
+  }
+
+  function setMode(m) {
+    state.mode = m;
+    save(KEY.mode, m);
+    document.querySelectorAll('[data-mode]').forEach((b) =>
+      b.classList.toggle('on', b.dataset.mode === m));
+
+    const card = m === 'card';
+    $('#cards').hidden = !card;
+    $('#result').hidden = card;
+    state.last = null;
+    flipped = false;
+    cards = [];
+    $('#goEat').hidden = true;
+    $('#myShop').hidden = true;
+
+    if (card) {
+      $('#cards').innerHTML = '<div class="cards-empty">点下面发牌<br>3 张里挑 1 张</div>';
+      $('#tip').textContent = '';
+    } else {
+      resultEl.className = 'result is-idle';
+      emojiEl.textContent = '🍽️';
+      nameEl.textContent = '点下面的按钮';
+      tagsEl.innerHTML = '';
+      $('#tip').textContent = '';
+    }
+    syncButtons();
   }
 
   // ---------- 去哪吃 ----------
@@ -683,7 +783,7 @@
     } else {
       closeWizard();
       renderFilter();
-      roll();
+      if (state.mode === 'card') deal(); else roll();
     }
   }
 
@@ -1025,41 +1125,6 @@
     $('#themeBtn').textContent = dark ? '☀️' : '🌙';
   }
 
-  function initShake() {
-    let last = 0, lastMag = 0;
-    function onMotion(e) {
-      const a = e.accelerationIncludingGravity;
-      if (!a) return;
-      const mag = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2);
-      const now = Date.now();
-      if (Math.abs(mag - lastMag) > 16 && now - last > 1200) {
-        last = now;
-        if ($('#view-pick').classList.contains('is-active') && $('#wizard').hidden) roll();
-      }
-      lastMag = mag;
-    }
-    if (typeof DeviceMotionEvent !== 'undefined' &&
-        typeof DeviceMotionEvent.requestPermission === 'function') {
-      $('#tip').innerHTML = '<button class="text-btn" id="shakeBtn" type="button">开启摇一摇</button>';
-      document.addEventListener('click', function handler(e) {
-        if (e.target.id !== 'shakeBtn') return;
-        DeviceMotionEvent.requestPermission().then((r) => {
-          if (r === 'granted') {
-            window.addEventListener('devicemotion', onMotion);
-            $('#tip').textContent = '摇一摇手机就能抽 🎲';
-          } else {
-            $('#tip').textContent = '没拿到权限，用按钮抽也一样';
-          }
-        }).catch(() => { $('#tip').textContent = '这台设备不支持摇一摇'; });
-        document.removeEventListener('click', handler);
-      });
-    } else if ('ondevicemotion' in window) {
-      window.addEventListener('devicemotion', onMotion);
-    } else {
-      $('#tip').textContent = '点按钮开抽，选不出来就多抽两次 🎲';
-    }
-  }
-
   // ---------- 分享 ----------
   /* 手机上走系统分享面板，桌面/不支持的退回复制链接 */
   function share() {
@@ -1200,9 +1265,21 @@
 
   // ---------- 事件绑定 ----------
   function bind() {
-    $('#rollBtn').addEventListener('click', () => roll());
-    $('#againBtn').addEventListener('click', () => roll(state.last && state.last.id));
+    // 之前「再抽一次」和「换一个」是两个按钮，差别只在会不会重复抽到同一道，
+    // 这个区别对用户没意义，合成一个，行为取「必定换一道」
+    $('#rollBtn').addEventListener('click', () => {
+      if (state.mode === 'card') deal();
+      else roll(state.last && state.last.id);
+    });
     $('#eatBtn').addEventListener('click', eatIt);
+    $('#modeTabs').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-mode]');
+      if (b && b.dataset.mode !== state.mode) setMode(b.dataset.mode);
+    });
+    $('#cards').addEventListener('click', (e) => {
+      const c = e.target.closest('[data-card]');
+      if (c) flipCard(Number(c.dataset.card));
+    });
     $('#wizardBtn').addEventListener('click', openWizard);
 
     $('#filterToggle').addEventListener('click', () => {
@@ -1392,7 +1469,7 @@
       if (!$('#view-pick').classList.contains('is-active')) return;
       if (!$('#wizard').hidden || !$('#settings').hidden) return;
       e.preventDefault();
-      roll();
+      if (state.mode === 'card') deal(); else roll();
     });
   }
 
@@ -1400,10 +1477,10 @@
   applyTheme(load(KEY.theme, null));
   fillSelects();
   setAddKind('dish');
+  setMode(state.mode);
   renderFilter();
   renderHistory();
   bind();
   syncButtons();
-  initShake();
   initSwipe();
 })();
