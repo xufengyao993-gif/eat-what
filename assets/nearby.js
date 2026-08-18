@@ -102,9 +102,12 @@ window.Nearby = (function () {
       const n = parseFloat(v);
       return isFinite(n) && n > 0 ? n : null;
     };
+    const loc = p.location || {};
     return {
       id: p.id,
       name: p.name || '',
+      lng: typeof loc.lng === 'number' ? loc.lng : null,
+      lat: typeof loc.lat === 'number' ? loc.lat : null,
       address: typeof p.address === 'string' ? p.address : '',
       tel: typeof p.tel === 'string' ? p.tel : '',
       distance: num(p.distance),
@@ -116,5 +119,62 @@ window.Nearby = (function () {
     };
   }
 
-  return { conf, setConf, ready, search };
+  /* 用高德自己的定位。
+     浏览器原生定位给的是 WGS-84，高德用 GCJ-02，市区能差三五百米；
+     高德这个插件直接返回 GCJ-02，省掉坐标转换。 */
+  function locate() {
+    return loadSDK().then(() => new Promise((resolve, reject) => {
+      AMap.plugin('AMap.Geolocation', () => {
+        const g = new AMap.Geolocation({
+          enableHighAccuracy: true,
+          timeout: 10000,
+          GeoLocationFirst: true      // 优先用浏览器定位，高德会做坐标纠偏
+        });
+        g.getCurrentPosition((status, r) => {
+          if (status === 'complete' && r.position) {
+            resolve(r.position.lng.toFixed(6) + ',' + r.position.lat.toFixed(6));
+          } else {
+            reject(new Error((r && r.message) || 'GEO_FAILED'));
+          }
+        });
+      });
+    }));
+  }
+
+  /* 三种出行方式各要多久。
+     按需调用（点开某家店才查），一次三个请求，别对整个列表跑。
+     某种方式查不到就不返回那一项，界面上就不显示。 */
+  function routes(origin, dest) {
+    return loadSDK().then(() => new Promise((resolve) => {
+      AMap.plugin(['AMap.Driving', 'AMap.Riding', 'AMap.Walking'], () => {
+        const out = {};
+        const from = origin.split(',').map(Number);
+        const to = [dest.lng, dest.lat];
+        const jobs = [
+          ['drive', () => new AMap.Driving({ policy: 0 })],
+          ['ride',  () => new AMap.Riding()],
+          ['walk',  () => new AMap.Walking()]
+        ];
+        let left = jobs.length;
+        const done = () => { if (--left === 0) { clearTimeout(timer); resolve(out); } };
+        // 有的服务可能一直不回调，整体设个上限，能查到几个算几个
+        const timer = setTimeout(() => { left = -1; resolve(out); }, 12000);
+
+        jobs.forEach(([k, make]) => {
+          let svc;
+          try { svc = make(); } catch (e) { return done(); }
+          svc.search(from, to, (status, res) => {
+            if (left < 0) return;                    // 已经超时返回过了
+            if (status === 'complete' && res && res.routes && res.routes.length) {
+              const r = res.routes[0];
+              out[k] = { time: r.time, distance: r.distance };
+            }
+            done();
+          });
+        });
+      });
+    }));
+  }
+
+  return { conf, setConf, ready, search, locate, routes };
 })();

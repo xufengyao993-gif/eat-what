@@ -48,7 +48,8 @@
     filter: Object.assign(freshFilter(), load(KEY.filter, {})),
     last: null,
     rolling: false,
-    geo: null            // 定位到的 '经度,纬度'
+    geo: null,           // 定位到的 '经度,纬度'
+    geoAccurate: false   // 是否来自高德定位（坐标系对得上）
   };
 
   const $ = (sel) => document.querySelector(sel);
@@ -140,17 +141,34 @@
 
   function locate() {
     const el = $('#geoStatus');
+    el.textContent = '正在定位…';
+
+    // 配了高德 Key 就用高德定位：它返回 GCJ-02，跟高德的 POI 坐标对得上。
+    // 浏览器原生定位是 WGS-84，直接拿去搜会偏三五百米。
+    if (Nearby.ready()) {
+      Nearby.locate()
+        .then((pos) => {
+          state.geo = pos;
+          state.geoAccurate = true;
+          el.textContent = '已定位';
+          renderFilter();
+        })
+        .catch(() => browserLocate(el));
+      return;
+    }
+    browserLocate(el);
+  }
+
+  function browserLocate(el) {
     if (!navigator.geolocation) {
       el.textContent = '这个浏览器不支持定位，可以改成选商圈。';
       return;
     }
-    el.textContent = '正在定位…';
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        // 注意：浏览器给的是 WGS-84，高德用 GCJ-02，市区内偏差约 300–500 米。
-        // 找餐厅够用，要更准就得接高德的坐标转换接口。
         state.geo = pos.coords.longitude.toFixed(6) + ',' + pos.coords.latitude.toFixed(6);
-        el.textContent = '已定位（误差约几百米）';
+        state.geoAccurate = false;
+        el.textContent = '已定位（浏览器定位，跟高德坐标系差几百米；填了高德 Key 会更准）';
         renderFilter();
       },
       () => { el.textContent = '定位没成功，改用选商圈吧。'; },
@@ -342,6 +360,64 @@
     }
   }
 
+  let shopCache = [];
+
+  /* 秒数 → 「12 分钟」「1 小时 20 分」 */
+  function mins(sec) {
+    const m = Math.max(1, Math.round(sec / 60));
+    return m < 60 ? m + ' 分钟' : Math.floor(m / 60) + ' 小时 ' + (m % 60 ? (m % 60) + ' 分' : '');
+  }
+  function km(m) {
+    return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1) + ' km';
+  }
+
+  /* 点「怎么过去」才查，一次三个请求。
+     整个列表都查的话既慢又费配额。 */
+  function showRoute(idx) {
+    const shop = shopCache[idx];
+    const boxes = document.querySelectorAll('[data-routebox]');
+    const box = boxes[idx];
+    if (!shop || !box) return;
+
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false;
+
+    const origin = placeCenter();
+    if (!origin) {
+      box.innerHTML = '<div class="route-note">先在上面「筛选条件 → 地点」里定位或选个商圈，才知道从哪儿出发。</div>';
+      return;
+    }
+
+    const fromWhere = state.filter.place === 'area' ? '从' + state.filter.area : '从你的位置';
+    box.innerHTML = '<div class="route-note">正在算路线…</div>';
+
+    Nearby.routes(origin, { lng: shop.lng, lat: shop.lat })
+      .then((r) => {
+        const rows = [
+          ['walk',  '🚶', '走路'],
+          ['ride',  '🚴', '骑车'],
+          ['drive', '🚗', '开车']
+        ].filter(([k]) => r[k]);
+
+        if (!rows.length) {
+          box.innerHTML = '<div class="route-note">这段路高德没给出方案，可能太近或太远。</div>';
+          return;
+        }
+        box.innerHTML =
+          '<div class="route-note">' + esc(fromWhere) + '出发' +
+          (state.filter.place === 'near' && !state.geoAccurate ? '（浏览器定位，有偏差）' : '') + '</div>' +
+          '<div class="route-rows">' + rows.map(([k, icon, label]) =>
+            '<div class="route-row"><span class="rr-icon">' + icon + '</span>' +
+              '<span class="rr-label">' + label + '</span>' +
+              '<span class="rr-time">' + mins(r[k].time) + '</span>' +
+              '<span class="rr-dist">' + km(r[k].distance) + '</span>' +
+            '</div>').join('') + '</div>';
+      })
+      .catch((e) => {
+        box.innerHTML = '<div class="route-note">算不出来：' + esc(String(e.message || e)) + '</div>';
+      });
+  }
+
   function showNearby() {
     const box = $('#nearby');
     box.hidden = false;
@@ -360,14 +436,16 @@
           box.innerHTML = '<p class="empty-note">附近没搜到，换个范围或者用上面的按钮跳过去看看。</p>';
           return;
         }
-        box.innerHTML = list.map((s) => {
+        shopCache = list;
+        box.innerHTML = list.map((s, i) => {
           const meta = [];
           if (s.rating)   meta.push('⭐ ' + s.rating);
           if (s.cost)     meta.push('人均 ¥' + Math.round(s.cost));
           if (s.distance) meta.push(s.distance < 1000
             ? Math.round(s.distance) + ' m'
             : (s.distance / 1000).toFixed(1) + ' km');
-          return '<div class="shop">' +
+          const canRoute = s.lng != null && s.lat != null && placeCenter();
+        return '<div class="shop" data-shop="' + i + '">' +
             '<div class="shop-top"><span class="shop-name">' + esc(s.name) + '</span>' +
               (meta.length ? '<span class="shop-meta">' + esc(meta.join(' · ')) + '</span>' : '') +
             '</div>' +
@@ -375,6 +453,10 @@
               ? '<div class="shop-dishes">' + s.dishes.map((d) => '<span class="tag">' + esc(d) + '</span>').join('') + '</div>'
               : '') +
             (s.address ? '<div class="shop-addr">' + esc(s.address) + '</div>' : '') +
+            (canRoute
+              ? '<button class="route-btn" type="button" data-route="' + i + '">怎么过去 ›</button>' +
+                '<div class="route-box" data-routebox="' + i + '" hidden></div>'
+              : '') +
           '</div>';
         }).join('');
       })
@@ -1072,6 +1154,10 @@
       if (b) openPlatform(b.dataset.plat);
     });
     $('#copyDish').addEventListener('click', copyDish);
+    $('#nearby').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-route]');
+      if (b) showRoute(Number(b.dataset.route));
+    });
     $('#nearbyBtn').addEventListener('click', () => {
       const box = $('#nearby');
       if (!box.hidden) { box.hidden = true; return; }
