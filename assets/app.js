@@ -25,8 +25,32 @@
 
   /* 每次都返回新对象。用共享常量的话，里面的数组会被 Object.assign 浅拷贝共享，
      用户勾选就把默认值污染了，「重置筛选」会重置不干净。 */
+  /* 价位从「便宜/适中/小贵」3 档改成 5 档，含义全变了。
+     老用户存过的选择按这个表映射过去，不然「适中」会变成完全不同的价格带。 */
+  const PRICE_VERSION = 2;
+  const PRICE_MIGRATE = { 1: [1, 2], 2: [3], 3: [4, 5] };
+
+  /* 注意判断的是「存下来的那份」有没有 pv。
+     要是拿合并后的对象判断，freshFilter 给的默认 pv 会把旧数据缺 pv
+     这个信号盖掉，迁移就永远不会触发。 */
+  function loadFilter() {
+    const saved = load(KEY.filter, null);
+    const f = Object.assign(freshFilter(), saved || {});
+    if (saved && saved.pv !== PRICE_VERSION && Array.isArray(saved.prices) && saved.prices.length) {
+      const out = [];
+      saved.prices.forEach((p) => {
+        (PRICE_MIGRATE[p] || [p]).forEach((x) => { if (out.indexOf(x) < 0) out.push(x); });
+      });
+      f.prices = out;
+    }
+    f.pv = PRICE_VERSION;
+    if (saved && saved.pv !== PRICE_VERSION) save(KEY.filter, f);   // 迁完存一次，别每次启动都算
+    return f;
+  }
+
   function freshFilter() {
     return {
+      pv: PRICE_VERSION,
       meal: 'auto',      // auto | b | l | d | n | all
       prices: [],        // 空＝不限
       cats: [],
@@ -45,7 +69,7 @@
     del:    load(KEY.del, []),
     off:    load(KEY.off, []),
     hist:   load(KEY.hist, []),
-    filter: Object.assign(freshFilter(), load(KEY.filter, {})),
+    filter: loadFilter(),
     last: null,
     rolling: false,
     geo: null,           // 定位到的 '经度,纬度'
@@ -186,9 +210,10 @@
   const tagsEl   = $('#resultTags');
 
   function tagsOf(d) {
-    const t = [d.c, (PRICES.find((p) => p.k === d.p) || {}).label];
+    const t = [d.c, '人均 ' + ((PRICES.find((p) => p.k === d.p) || {}).label || '')];
     if (d.s > 0) t.push((SPICY.find((s) => s.k === d.s) || {}).label);
     if (d.v) t.push('清淡');
+    if (d.b) t.push('连锁店');
     return t.filter(Boolean);
   }
 
@@ -269,12 +294,14 @@
     const center = placeCenter();
     const p = placeText();
 
-    $('#platforms').innerHTML = PLATFORMS.map((pf) =>
-      '<button class="plat" type="button" data-plat="' + pf.k + '">' +
+    const platBtn = (pf, attr) =>
+      '<button class="plat" type="button" ' + attr + '="' + pf.k + '">' +
         '<span class="plat-icon">' + pf.icon + '</span>' +
         '<span class="plat-name">' + esc(pf.label) + '</span>' +
-      '</button>'
-    ).join('');
+        (pf.hint ? '<span class="plat-hint">' + esc(pf.hint) + '</span>' : '') +
+      '</button>';
+    $('#platforms').innerHTML = PLATFORMS.map((pf) => platBtn(pf, 'data-plat')).join('');
+    $('#delivery').innerHTML  = DELIVERY.map((pf) => platBtn(pf, 'data-deliv')).join('');
 
     // 自己记过的店，比点评上翻半天强
     const d = state.last;
@@ -320,6 +347,40 @@
     return { via: 'newtab', url: web };
   }
 
+  function openDelivery(k) {
+    const pf = DELIVERY.find((x) => x.k === k);
+    if (!pf) return;
+    // 外卖平台按你自己的收货地址算配送范围，搜索词带上商圈反而搜不到
+    const kw = state.last ? state.last.n : '';
+
+    // 淘宝闪购、京东外卖都是 App 内的频道，没法直达搜索，
+    // 那就先把菜名复制好，省得进去还要自己打字
+    if (pf.copyFirst) {
+      const done = () => toast('已复制「' + kw + '」，' + (pf.hint || '进去粘贴搜索'));
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(kw).then(done).catch(done);
+      } else {
+        copyFallback(kw);
+      }
+    }
+
+    const t = platformTarget(pf, kw, '');
+    if (t.via === 'newtab') { window.open(t.url, '_blank', 'noopener'); return; }
+    if (t.via === 'web' && inWechat) {
+      toast('微信里打不开 App，右上角「···」→ 在浏览器打开');
+      setTimeout(() => { window.location.href = t.url; }, 1400);
+      return;
+    }
+    if (t.via === 'scheme') {
+      const timer = setTimeout(() => { window.location.href = t.fallback; }, 1500);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearTimeout(timer);
+      }, { once: true });
+    }
+    // 复制那条路要留点时间让提示看得见
+    setTimeout(() => { window.location.href = t.url; }, pf.copyFirst ? 900 : 0);
+  }
+
   function openPlatform(k) {
     const pf = PLATFORMS.find((x) => x.k === k);
     if (!pf) return;
@@ -346,7 +407,7 @@
   // 供自动化测试检查跳转决策，不影响正常使用
   window.EatWhat = {
     platformTarget: (k, kw, center) =>
-      platformTarget(PLATFORMS.find((x) => x.k === k), kw, center),
+      platformTarget(PLATFORMS.concat(DELIVERY).find((x) => x.k === k), kw, center),
     env: { inWechat: inWechat, isAndroid: isAndroid, isIOS: isIOS }
   };
 
@@ -508,11 +569,7 @@
   const STEPS = [
     {
       title: '先定个预算', sub: '人均大概多少？', key: 'prices', multi: true,
-      options: () => PRICES.map((p) => ({
-        v: p.k,
-        label: p.label,
-        note: { 1: '20 元以内', 2: '20–50 元', 3: '50 元以上' }[p.k]
-      }))
+      options: () => PRICES.map((p) => ({ v: p.k, label: p.label, note: p.note }))
     },
     {
       title: '想吃什么菜系', sub: '可以多选，不选就是都行', key: 'cats', multi: true,
@@ -765,7 +822,8 @@
           '<input type="checkbox" data-toggle="' + d.id + '"' + (off ? '' : ' checked') +
             ' aria-label="参与抽取">' +
           '<button class="dish-main" type="button" data-edit="' + d.id + '">' +
-            '<span class="name">' + esc(d.e) + ' ' + esc(d.n) + '</span>' +
+            '<span class="name">' + esc(d.e) + ' ' + esc(d.n) +
+              (d.b ? '<span class="brand-tag">店</span>' : '') + '</span>' +
             (sub ? '<span class="sub">' + esc(sub) + '</span>' : '') +
           '</button>' +
           '<span class="meta">' + meta + '</span>' +
@@ -1184,6 +1242,10 @@
     $('#platforms').addEventListener('click', (e) => {
       const b = e.target.closest('[data-plat]');
       if (b) openPlatform(b.dataset.plat);
+    });
+    $('#delivery').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-deliv]');
+      if (b) openDelivery(b.dataset.deliv);
     });
     $('#copyDish').addEventListener('click', copyDish);
     $('#nearby').addEventListener('click', (e) => {

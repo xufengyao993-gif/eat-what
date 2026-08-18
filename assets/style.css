@@ -413,3 +413,14 @@ main { max-width: 560px; margin: 0 auto; padding: 14px 14px 24px; }
   white-space: nowrap;
 }
 .nb-use:active { transform: scale(.95); }
+
+.brand-tag {
+  display: inline-block; margin-left: 6px; padding: 1px 5px;
+  border-radius: 4px; background: var(--brand-soft); color: var(--brand-deep);
+  font-size: 10px; vertical-align: middle;
+}
+
+.go-section { margin-top: 14px; }
+.go-section:first-of-type { margin-top: 0; }
+.go-label { font-size: 12px; font-weight: 700; color: var(--fg-mute); margin-bottom: 8px; }
+.plat-hint { font-size: 10px; color: var(--fg-mute); line-height: 1.3; text-align: center; }
