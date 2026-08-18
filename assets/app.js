@@ -645,6 +645,39 @@
     }
   }
 
+  // ---------- 分享 ----------
+  /* 手机上走系统分享面板，桌面/不支持的退回复制链接 */
+  function share() {
+    const url = location.href.split(/[?#]/)[0];
+    const data = { title: '今天吃啥', text: '纠结吃啥的时候点一下，帮你决定', url: url };
+
+    if (navigator.share) {
+      navigator.share(data).catch(() => {});   // 用户取消分享不算错误
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(() => toast('链接已复制，发给朋友吧'))
+        .catch(() => copyFallback(url));
+      return;
+    }
+    copyFallback(url);
+  }
+
+  /* 老浏览器 / 非安全上下文下 clipboard API 不可用 */
+  function copyFallback(url) {
+    const ta = document.createElement('textarea');
+    ta.value = url;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    let okCopy = false;
+    try { okCopy = document.execCommand('copy'); } catch (e) { okCopy = false; }
+    document.body.removeChild(ta);
+    toast(okCopy ? '链接已复制，发给朋友吧' : url);
+  }
+
   // ---------- 设置 ----------
   function openSettings() {
     const c = Nearby.conf() || {};
@@ -762,6 +795,7 @@
     });
 
     // 设置
+    $('#shareBtn').addEventListener('click', share);
     $('#setBtn').addEventListener('click', openSettings);
     $('#saveKey').addEventListener('click', () => {
       const key = $('#amapKey').value.trim();
