@@ -1,7 +1,35 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
-  <rect width="192" height="192" rx="42" fill="#ff6b35"/>
-  <g fill="#fff">
-    <path d="M62 38c4 0 6 3 6 7v30c0 8-5 14-12 16v58c0 5-4 9-9 9s-9-4-9-9v-58c-7-2-12-8-12-16V45c0-4 2-7 6-7s6 3 6 7v28h6V45c0-4 2-7 6-7s6 3 6 7v28h6V45c0-4 2-7 6-7z"/>
-    <path d="M132 38c16 0 26 20 26 46 0 18-5 30-13 34v31c0 5-4 9-9 9s-9-4-9-9V38z" opacity=".95"/>
+  <rect width="192" height="192" fill="#f7c85a"/>
+
+  <!-- 餐具：叉子（左）勺子（右），压在熊后面 -->
+  <g stroke="#8fd6d6" stroke-width="10" stroke-linecap="round" fill="none">
+    <path d="M35 148 L35 82"/>
+    <path d="M161 148 L161 88"/>
   </g>
+  <g fill="#8fd6d6">
+    <path d="M22 44 v30 a13 13 0 0 0 26 0 V44 a3 3 0 0 0-6 0 v22 h-4 V44 a3 3 0 0 0-6 0 v22 h-4 V44 a3 3 0 0 0-6 0z"/>
+    <ellipse cx="161" cy="66" rx="18" ry="27"/>
+  </g>
+
+  <!-- 熊 -->
+  <g fill="#221c17">
+    <circle cx="52" cy="72" r="20"/>
+    <circle cx="140" cy="72" r="20"/>
+    <circle cx="96" cy="112" r="56"/>
+  </g>
+  <!-- 脸 -->
+  <ellipse cx="96" cy="134" rx="30" ry="23" fill="#fdf6ec"/>
+  <g fill="#fdf6ec">
+    <circle cx="76" cy="104" r="11"/>
+    <circle cx="116" cy="104" r="11"/>
+  </g>
+  <g fill="#221c17">
+    <circle cx="77" cy="105" r="5.5"/>
+    <circle cx="115" cy="105" r="5.5"/>
+    <ellipse cx="96" cy="122" rx="7" ry="5"/>
+  </g>
+  <!-- 嘴 -->
+  <path d="M88 132 q8 9 16 0" stroke="#221c17" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- 口水 -->
+  <path d="M110 138 q4 8 0 12 q-4-4 0-12z" fill="#8fd6d6"/>
 </svg>
