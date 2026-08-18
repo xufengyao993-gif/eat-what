@@ -5,6 +5,8 @@
   // ---------- 本地存储 ----------
   const KEY = {
     custom: 'ew.custom',
+    edits:  'ew.edits',      // 对默认菜的修改（店名、评价等）
+    del:    'ew.deleted',    // 被删掉的默认菜
     off:    'ew.off',
     hist:   'ew.history',
     filter: 'ew.filter',
@@ -39,6 +41,8 @@
 
   const state = {
     custom: load(KEY.custom, []),
+    edits:  load(KEY.edits, {}),
+    del:    load(KEY.del, []),
     off:    load(KEY.off, []),
     hist:   load(KEY.hist, []),
     filter: Object.assign(freshFilter(), load(KEY.filter, {})),
@@ -52,7 +56,18 @@
   const MEAL_LABEL = { b: '早餐', l: '午餐', d: '晚餐', n: '夜宵' };
 
   const baseDishes = DEFAULT_DISHES.map((d, i) => Object.assign({ id: 'd' + i }, d));
-  const allDishes = () => baseDishes.concat(state.custom);
+
+  /* 默认菜是写死在代码里的，用户的修改单独存一份盖在上面，
+     这样以后我更新菜品库，你改过的东西不会被冲掉。 */
+  function allDishes() {
+    const gone = new Set(state.del);
+    const base = baseDishes
+      .filter((d) => !gone.has(d.id))
+      .map((d) => (state.edits[d.id] ? Object.assign({}, d, state.edits[d.id]) : d));
+    return base.concat(state.custom);
+  }
+
+  const dishById = (id) => allDishes().find((d) => d.id === id) || null;
 
   function currentMeal() {
     const h = new Date().getHours();
@@ -217,11 +232,14 @@
   }
 
   // ---------- 去哪吃 ----------
-  /** 搜索词 = 菜名 + 地点，例如「小笼包 静安寺」 */
+  /** 搜索词。记过店名就直接搜店，比搜菜名准得多；
+      店名自带位置信息，就不再拼商圈了 */
   function searchKeyword() {
-    if (!state.last) return '';
+    const d = state.last;
+    if (!d) return '';
+    if (d.shop) return d.addr ? d.shop + ' ' + d.addr : d.shop;
     const p = placeText();
-    return p && p !== '附近' ? state.last.n + ' ' + p : state.last.n;
+    return p && p !== '附近' ? d.n + ' ' + p : d.n;
   }
 
   function renderGoEat() {
@@ -230,7 +248,6 @@
     const center = placeCenter();
     const p = placeText();
 
-    $('#goTitle').textContent = p ? '去哪吃 · ' + p : '去哪吃';
     $('#platforms').innerHTML = PLATFORMS.map((pf) =>
       '<button class="plat" type="button" data-plat="' + pf.k + '">' +
         '<span class="plat-icon">' + pf.icon + '</span>' +
@@ -238,6 +255,23 @@
       '</button>'
     ).join('');
 
+    // 自己记过的店，比点评上翻半天强
+    const d = state.last;
+    const mine = $('#myShop');
+    if (d.shop || d.note || d.star) {
+      const head = [d.shop, d.addr].filter(Boolean).join(' · ') || '我的记录';
+      mine.innerHTML =
+        '<div class="ms-top">📍 ' + esc(head) +
+          (d.star ? ' <span class="ms-star">' + '⭐'.repeat(d.star) + '</span>' : '') + '</div>' +
+        (d.note ? '<div class="ms-note">' + esc(d.note) + '</div>' : '');
+      mine.hidden = false;
+    } else {
+      mine.hidden = true;
+      mine.innerHTML = '';
+    }
+
+    $('#goTitle').textContent = d.shop ? '去哪吃 · ' + d.shop
+                                       : (p ? '去哪吃 · ' + p : '去哪吃');
     $('#nearbyBtn').textContent = Nearby.ready() ? '看附近的店 ›' : '配置后可看附近的店 ›';
     $('#nearby').hidden = true;
     $('#nearby').innerHTML = '';
@@ -612,22 +646,153 @@
       const rows = groups[c].map((d) => {
         const off = offSet.has(d.id);
         const meta = d.m.split('').map((k) => MEAL_LABEL[k]).join('/');
-        return '<label class="dish-row' + (off ? ' off' : '') + '">' +
-          '<input type="checkbox" data-toggle="' + d.id + '"' + (off ? '' : ' checked') + '>' +
-          '<span class="name">' + esc(d.e) + ' ' + esc(d.n) + '</span>' +
+        const sub = shopLine(d);
+        return '<div class="dish-row' + (off ? ' off' : '') + '">' +
+          '<input type="checkbox" data-toggle="' + d.id + '"' + (off ? '' : ' checked') +
+            ' aria-label="参与抽取">' +
+          '<button class="dish-main" type="button" data-edit="' + d.id + '">' +
+            '<span class="name">' + esc(d.e) + ' ' + esc(d.n) + '</span>' +
+            (sub ? '<span class="sub">' + esc(sub) + '</span>' : '') +
+          '</button>' +
           '<span class="meta">' + meta + '</span>' +
-          (d.id.charAt(0) === 'c' ? '<button class="del-btn" data-del="' + d.id + '" type="button">删除</button>' : '') +
-        '</label>';
+          '<button class="dish-edit" type="button" data-edit="' + d.id + '" aria-label="编辑">✏️</button>' +
+        '</div>';
       }).join('');
       return '<div class="cat-group"><div class="cat-name">' + esc(c) +
              '（' + groups[c].length + '）</div>' + rows + '</div>';
     }).join('');
   }
 
+  // ---------- 编辑一道菜 ----------
+  let edId = null;
+  let edMeals = '';
+  let edStar = 0;
+
+  /* 「大壶春 · 云南南路 · ⭐4」这种一行摘要，没填过就返回空 */
+  function shopLine(d) {
+    const bits = [];
+    if (d.shop) bits.push(d.shop);
+    if (d.addr) bits.push(d.addr);
+    if (d.star) bits.push('⭐' + d.star);
+    return bits.join(' · ');
+  }
+
+  function openEditor(id) {
+    const d = dishById(id);
+    if (!d) return;
+    edId = id;
+    edMeals = d.m || 'bldn';
+    edStar = d.star || 0;
+
+    $('#edTitle').textContent = '编辑「' + d.n + '」';
+    $('#edEmoji').value = d.e || '🍽️';
+    $('#edName').value = d.n || '';
+    $('#edCat').value = d.c;
+    $('#edPrice').value = String(d.p);
+    $('#edSpicy').value = String(d.s);
+    $('#edShop').value = d.shop || '';
+    $('#edAddr').value = d.addr || '';
+    $('#edNote').value = d.note || '';
+    renderEdMeal();
+    renderEdStar();
+
+    $('#editor').hidden = false;
+    document.body.style.overflow = 'hidden';
+  }
+
+  function renderEdMeal() {
+    $('#edMeal').innerHTML = MEALS.map((m) =>
+      chip(m.label, edMeals.includes(m.k), 'data-em="' + m.k + '"')).join('');
+  }
+
+  function renderEdStar() {
+    $('#edStar').innerHTML = [1, 2, 3, 4, 5].map((i) =>
+      '<button class="star' + (i <= edStar ? ' on' : '') + '" type="button" data-star="' + i + '" ' +
+      'aria-label="' + i + ' 星">⭐</button>').join('');
+  }
+
+  function saveEditor() {
+    const name = $('#edName').value.trim();
+    if (!name) { toast('菜名不能空着'); return; }
+    if (!edMeals) { toast('至少选一个「什么时候吃」'); return; }
+    if (allDishes().some((d) => d.n === name && d.id !== edId)) {
+      toast('「' + name + '」跟别的菜重名了');
+      return;
+    }
+
+    const patch = {
+      n: name,
+      e: $('#edEmoji').value.trim() || '🍽️',
+      c: $('#edCat').value,
+      p: Number($('#edPrice').value),
+      s: Number($('#edSpicy').value),
+      m: edMeals,
+      shop: $('#edShop').value.trim(),
+      addr: $('#edAddr').value.trim(),
+      note: $('#edNote').value.trim(),
+      star: edStar
+    };
+
+    if (edId.charAt(0) === 'c') {
+      const i = state.custom.findIndex((d) => d.id === edId);
+      if (i >= 0) state.custom[i] = Object.assign({}, state.custom[i], patch);
+      save(KEY.custom, state.custom);
+    } else {
+      state.edits[edId] = Object.assign({}, state.edits[edId], patch);
+      save(KEY.edits, state.edits);
+    }
+
+    closeSheet('editor');
+    renderMenu();
+    renderFilter();
+    if (state.last && state.last.id === edId) {
+      state.last = dishById(edId);
+      paint(state.last, true);
+      renderGoEat();
+    }
+    toast('存好了');
+  }
+
+  function deleteDish() {
+    const d = dishById(edId);
+    if (!d) return;
+    if (!confirm('把「' + d.n + '」从菜单里删掉？\n（默认菜可以用「恢复默认」找回来）')) return;
+
+    if (edId.charAt(0) === 'c') {
+      state.custom = state.custom.filter((x) => x.id !== edId);
+      save(KEY.custom, state.custom);
+    } else {
+      state.del = state.del.concat(edId);
+      save(KEY.del, state.del);
+      delete state.edits[edId];
+      save(KEY.edits, state.edits);
+    }
+    state.off = state.off.filter((x) => x !== edId);
+    save(KEY.off, state.off);
+
+    closeSheet('editor');
+    if (state.last && state.last.id === edId) {
+      state.last = null;
+      $('#goEat').hidden = true;
+      resultEl.className = 'result is-idle';
+      emojiEl.textContent = '🍽️';
+      nameEl.textContent = '点下面的按钮';
+      tagsEl.innerHTML = '';
+      syncButtons();
+    }
+    renderMenu();
+    renderFilter();
+    toast('已删除「' + d.n + '」');
+  }
+
   function fillSelects() {
     $('#addCat').innerHTML   = CATEGORIES.map((c) => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
     $('#addPrice').innerHTML = PRICES.map((p) => '<option value="' + p.k + '"' + (p.k === 2 ? ' selected' : '') + '>' + p.label + '</option>').join('');
     $('#addSpicy').innerHTML = SPICY.map((s) => '<option value="' + s.k + '">' + s.label + '</option>').join('');
+
+    $('#edCat').innerHTML   = CATEGORIES.map((c) => '<option value="' + esc(c) + '">' + esc(c) + '</option>').join('');
+    $('#edPrice').innerHTML = PRICES.map((p) => '<option value="' + p.k + '">' + p.label + '</option>').join('');
+    $('#edSpicy').innerHTML = SPICY.map((s) => '<option value="' + s.k + '">' + s.label + '</option>').join('');
   }
 
   function addDish(e) {
@@ -825,20 +990,34 @@
     $('#addForm').addEventListener('submit', addDish);
     $('#search').addEventListener('input', renderMenu);
     $('#restoreBtn').addEventListener('click', () => {
-      if (!confirm('恢复默认菜单？自己添加的菜会被删掉，吃饭记录保留。')) return;
-      state.custom = []; state.off = [];
+      if (!confirm('恢复默认菜单？\n自己加的菜、改过的内容、店名评价都会没掉，删掉的默认菜会回来。\n吃饭记录保留。')) return;
+      state.custom = []; state.off = []; state.edits = {}; state.del = [];
       save(KEY.custom, state.custom); save(KEY.off, state.off);
+      save(KEY.edits, state.edits); save(KEY.del, state.del);
       renderMenu(); renderFilter();
       toast('已恢复默认菜单');
     });
     $('#dishList').addEventListener('click', (e) => {
-      const del = e.target.closest('[data-del]');
-      if (!del) return;
-      e.preventDefault();
-      state.custom = state.custom.filter((d) => d.id !== del.dataset.del);
-      save(KEY.custom, state.custom);
-      renderMenu(); renderFilter();
+      const ed = e.target.closest('[data-edit]');
+      if (ed) openEditor(ed.dataset.edit);
     });
+
+    $('#edMeal').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-em]');
+      if (!b) return;
+      const k = b.dataset.em;
+      edMeals = edMeals.includes(k) ? edMeals.replace(k, '') : edMeals + k;
+      renderEdMeal();
+    });
+    $('#edStar').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-star]');
+      if (!b) return;
+      const v = Number(b.dataset.star);
+      edStar = (edStar === v) ? 0 : v;    // 再点一次同一颗＝取消评分
+      renderEdStar();
+    });
+    $('#edSave').addEventListener('click', saveEditor);
+    $('#edDel').addEventListener('click', deleteDish);
     $('#dishList').addEventListener('change', (e) => {
       const cb = e.target.closest('[data-toggle]');
       if (!cb) return;
@@ -903,6 +1082,7 @@
       if (e.key === 'Escape') {
         if (!$('#wizard').hidden) closeSheet('wizard');
         if (!$('#settings').hidden) closeSheet('settings');
+        if (!$('#editor').hidden) closeSheet('editor');
         return;
       }
       if (e.code !== 'Space' && e.code !== 'Enter') return;

@@ -110,6 +110,7 @@
           <button id="nearbyBtn" class="text-btn" type="button">看附近的店 ›</button>
         </div>
       </div>
+      <div id="myShop" class="my-shop" hidden></div>
       <div id="platforms" class="platforms"></div>
       <div id="nearby" class="nearby" hidden></div>
     </div>
@@ -178,6 +179,68 @@
       <button id="wSkip" class="btn btn-ghost btn-sm" type="button">这步随便</button>
     </div>
     <p class="swipe-hint">可以多选 · 左右滑动也能翻页</p>
+  </div>
+</div>
+
+<!-- ============ 编辑一道菜 ============ -->
+<div id="editor" class="sheet" hidden>
+  <div class="sheet-mask" data-close="editor"></div>
+  <div class="sheet-body">
+    <div class="sheet-head">
+      <strong id="edTitle">编辑</strong>
+      <button class="text-btn" type="button" data-close="editor">关闭</button>
+    </div>
+
+    <div class="field">
+      <div class="field-label">菜名</div>
+      <div class="ed-name-row">
+        <input id="edEmoji" class="input ed-emoji" type="text" maxlength="2" aria-label="图标">
+        <input id="edName" class="input" type="text" maxlength="20" placeholder="菜名">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">分类</div>
+      <div class="add-row">
+        <select id="edCat" class="select" aria-label="菜系"></select>
+        <select id="edPrice" class="select" aria-label="预算"></select>
+        <select id="edSpicy" class="select" aria-label="辣度"></select>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">什么时候吃<span class="hint">可多选</span></div>
+      <div id="edMeal" class="chips" role="group" aria-label="餐别"></div>
+    </div>
+
+    <div class="ed-divider">在哪吃过 · 好不好吃</div>
+
+    <div class="field">
+      <div class="field-label">店名</div>
+      <input id="edShop" class="input" type="text" maxlength="30" placeholder="比如：大壶春">
+      <p class="hint block">填了店名，抽到这道菜时会直接搜这家店，比搜菜名准。</p>
+    </div>
+
+    <div class="field">
+      <div class="field-label">位置</div>
+      <input id="edAddr" class="input" type="text" maxlength="40" placeholder="比如：云南南路 / 静安寺">
+    </div>
+
+    <div class="field">
+      <div class="field-label">评分</div>
+      <div id="edStar" class="stars" role="group" aria-label="评分"></div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">评价</div>
+      <textarea id="edNote" class="input ed-note" rows="3" maxlength="140"
+                placeholder="皮脆汁多，人多要排队，别点招牌以外的"></textarea>
+    </div>
+
+    <div class="ed-actions">
+      <button id="edSave" class="btn btn-primary btn-sm" type="button">保存</button>
+      <button id="edDel" class="btn btn-ghost btn-sm danger-btn" type="button">删除这道菜</button>
+    </div>
   </div>
 </div>
 
