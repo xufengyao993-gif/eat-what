@@ -1,0 +1,13 @@
+{
+  "name": "今天吃啥",
+  "short_name": "吃啥",
+  "description": "纠结吃什么的时候，随机帮你决定一顿饭。",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#fdf6f0",
+  "theme_color": "#ff6b35",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

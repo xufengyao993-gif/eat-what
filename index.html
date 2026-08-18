@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>今天吃啥 · 帮你做决定</title>
+<meta name="description" content="纠结吃什么的时候，随机帮你决定一顿饭。">
+<meta name="theme-color" content="#ff6b35">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1 class="brand">今天吃啥<span class="brand-dot">?</span></h1>
+  <button id="themeBtn" class="icon-btn" type="button" aria-label="切换深浅色">🌙</button>
+</header>
+
+<main>
+  <!-- ============ 抽菜 ============ -->
+  <section id="view-pick" class="view is-active">
+
+    <div class="panel">
+      <button id="filterToggle" class="filter-head" type="button" aria-expanded="false" aria-controls="filterBody">
+        <span class="filter-title">筛选条件</span>
+        <span id="poolCount" class="pool-count">候选 0 道</span>
+        <span class="chev" aria-hidden="true">▾</span>
+      </button>
+
+      <div id="filterBody" class="filter-body" hidden>
+        <div class="field">
+          <div class="field-label">餐别</div>
+          <div id="fMeal" class="chips" role="group" aria-label="餐别"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">口味分类<span class="hint">不选＝全部</span></div>
+          <div id="fCat" class="chips" role="group" aria-label="分类"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">价位</div>
+          <div id="fPrice" class="chips" role="group" aria-label="价位"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">辣度</div>
+          <div id="fSpicy" class="chips" role="group" aria-label="辣度"></div>
+        </div>
+        <div class="switches">
+          <label class="switch">
+            <input type="checkbox" id="fVeg">
+            <span>只要清淡 / 素食友好</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="fAvoid" checked>
+            <span>少重复最近吃过的</span>
+          </label>
+        </div>
+        <button id="resetFilter" class="text-btn" type="button">重置筛选</button>
+      </div>
+    </div>
+
+    <div class="stage">
+      <div id="result" class="result is-idle" aria-live="polite">
+        <div id="resultEmoji" class="result-emoji">🍽️</div>
+        <div id="resultName" class="result-name">点下面的按钮</div>
+        <div id="resultTags" class="result-tags"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="rollBtn" class="btn btn-primary" type="button">吃什么？</button>
+      <div class="actions-sub">
+        <button id="againBtn" class="btn btn-ghost" type="button" disabled>换一个</button>
+        <button id="eatBtn" class="btn btn-ghost" type="button" disabled>就吃这个</button>
+      </div>
+      <p id="tip" class="tip">摇一摇手机也能抽（部分手机需授权）</p>
+    </div>
+  </section>
+
+  <!-- ============ 菜单 ============ -->
+  <section id="view-menu" class="view">
+    <div class="panel">
+      <div class="field-label">添加自己的菜</div>
+      <form id="addForm" class="add-form" autocomplete="off">
+        <input id="addName" class="input" type="text" placeholder="比如：楼下的黄焖鸡" maxlength="20" required>
+        <div class="add-row">
+          <select id="addCat" class="select" aria-label="分类"></select>
+          <select id="addPrice" class="select" aria-label="价位"></select>
+          <select id="addSpicy" class="select" aria-label="辣度"></select>
+        </div>
+        <button class="btn btn-primary btn-sm" type="submit">添加</button>
+      </form>
+    </div>
+
+    <div class="panel">
+      <div class="list-head">
+        <input id="search" class="input" type="search" placeholder="搜索菜名…">
+        <button id="restoreBtn" class="text-btn" type="button">恢复默认</button>
+      </div>
+      <p class="hint block">取消勾选＝不参与抽取；自己加的菜可以删除。</p>
+      <div id="dishList" class="dish-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ 记录 ============ -->
+  <section id="view-history" class="view">
+    <div class="panel">
+      <div id="stats" class="stats"></div>
+    </div>
+    <div class="panel">
+      <div class="list-head">
+        <div class="field-label">吃饭记录</div>
+        <button id="clearHist" class="text-btn danger" type="button">清空</button>
+      </div>
+      <div id="histList" class="hist-list"></div>
+    </div>
+  </section>
+</main>
+
+<nav class="tabbar" role="tablist">
+  <button class="tab is-active" data-view="pick" role="tab" type="button"><span>🎲</span>抽菜</button>
+  <button class="tab" data-view="menu" role="tab" type="button"><span>📋</span>菜单</button>
+  <button class="tab" data-view="history" role="tab" type="button"><span>🕘</span>记录</button>
+</nav>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="assets/data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
