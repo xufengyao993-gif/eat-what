@@ -398,3 +398,18 @@ main { max-width: 560px; margin: 0 auto; padding: 14px 14px 24px; }
 .rr-label { color: var(--fg-mute); width: 30px; flex: none; }
 .rr-time { font-weight: 700; flex: 1; }
 .rr-dist { color: var(--fg-mute); font-size: 12px; }
+
+/* 附近列表顶上的状态条 */
+.nb-head {
+  font-size: 12px; color: var(--fg-mute); line-height: 1.7;
+  padding: 8px 10px; margin-bottom: 6px;
+  background: var(--bg); border-radius: 10px;
+}
+.nb-head.warn { background: var(--brand-soft); color: var(--brand-deep); }
+.nb-use {
+  border: 0; background: var(--brand); color: #fff;
+  font-size: 12px; font-weight: 600; padding: 4px 11px;
+  border-radius: 999px; cursor: pointer; margin-left: 6px;
+  white-space: nowrap;
+}
+.nb-use:active { transform: scale(.95); }

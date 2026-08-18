@@ -97,10 +97,19 @@ window.Nearby = (function () {
 
   /** 高德返回的字段不太稳定，统一成自己的形状，缺什么就不显示什么 */
   function normalize(p) {
-    const biz = p.biz_ext || {};
+    // 评分和人均在不同版本里出现在不同位置，挨个找一遍；
+    // 另外这属于增值字段，基础版查询可能压根不返回
+    const biz = p.biz_ext || p.bizExt || {};
     const num = (v) => {
       const n = parseFloat(v);
       return isFinite(n) && n > 0 ? n : null;
+    };
+    const pick = (...vals) => {
+      for (const v of vals) {
+        const n = num(v);
+        if (n !== null) return n;
+      }
+      return null;
     };
     const loc = p.location || {};
     return {
@@ -111,10 +120,10 @@ window.Nearby = (function () {
       address: typeof p.address === 'string' ? p.address : '',
       tel: typeof p.tel === 'string' ? p.tel : '',
       distance: num(p.distance),
-      rating: num(biz.rating),
-      cost: num(biz.cost),
+      rating: pick(biz.rating, p.rating),
+      cost: pick(biz.cost, biz.meal_price, p.cost),
       // 高德的 tag 字段里常常就是推荐菜，例如 "小笼包,蟹粉小笼"
-      dishes: (typeof p.tag === 'string' ? p.tag : '')
+      dishes: (typeof p.tag === 'string' ? p.tag : (typeof p.tags === 'string' ? p.tags : ''))
                 .split(/[,，]/).map((s) => s.trim()).filter(Boolean).slice(0, 4)
     };
   }

@@ -139,41 +139,44 @@
     return null;
   }
 
+  /** @returns {Promise<string>} 定位到的 '经度,纬度' */
   function locate() {
     const el = $('#geoStatus');
-    el.textContent = '正在定位…';
+    if (el) el.textContent = '正在定位…';
 
     // 配了高德 Key 就用高德定位：它返回 GCJ-02，跟高德的 POI 坐标对得上。
     // 浏览器原生定位是 WGS-84，直接拿去搜会偏三五百米。
-    if (Nearby.ready()) {
-      Nearby.locate()
-        .then((pos) => {
-          state.geo = pos;
-          state.geoAccurate = true;
-          el.textContent = '已定位';
-          renderFilter();
-        })
-        .catch(() => browserLocate(el));
-      return;
-    }
-    browserLocate(el);
+    const p = Nearby.ready()
+      ? Nearby.locate().then((pos) => ({ pos: pos, accurate: true }))
+                       .catch(() => browserLocate())
+      : browserLocate();
+
+    return p.then((r) => {
+      state.geo = r.pos;
+      state.geoAccurate = r.accurate;
+      if (el) el.textContent = r.accurate
+        ? '已定位'
+        : '已定位（浏览器定位，跟高德坐标系差几百米；填了高德 Key 会更准）';
+      renderFilter();
+      return r.pos;
+    }).catch((e) => {
+      if (el) el.textContent = '定位没成功，改用选商圈吧。';
+      throw e;
+    });
   }
 
-  function browserLocate(el) {
-    if (!navigator.geolocation) {
-      el.textContent = '这个浏览器不支持定位，可以改成选商圈。';
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        state.geo = pos.coords.longitude.toFixed(6) + ',' + pos.coords.latitude.toFixed(6);
-        state.geoAccurate = false;
-        el.textContent = '已定位（浏览器定位，跟高德坐标系差几百米；填了高德 Key 会更准）';
-        renderFilter();
-      },
-      () => { el.textContent = '定位没成功，改用选商圈吧。'; },
-      { timeout: 8000, maximumAge: 300000 }
-    );
+  function browserLocate() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) return reject(new Error('NO_GEO'));
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({
+          pos: pos.coords.longitude.toFixed(6) + ',' + pos.coords.latitude.toFixed(6),
+          accurate: false
+        }),
+        () => reject(new Error('DENIED')),
+        { timeout: 8000, maximumAge: 300000 }
+      );
+    });
   }
 
   // ---------- 抽取 ----------
@@ -384,7 +387,8 @@
 
     const origin = placeCenter();
     if (!origin) {
-      box.innerHTML = '<div class="route-note">先在上面「筛选条件 → 地点」里定位或选个商圈，才知道从哪儿出发。</div>';
+      box.innerHTML = '<div class="route-note">还不知道你从哪儿出发。' +
+        '<button class="nb-use" type="button" data-usegeo>用我的位置</button></div>';
       return;
     }
 
@@ -418,6 +422,33 @@
       });
   }
 
+  /* 列表顶上一行，说清楚这批结果是按什么搜出来的。
+     没有中心点时结果会散落全城，得让人看得见、也能一键改掉。 */
+  function nearbyHeader() {
+    const c = placeCenter();
+    const btn = '<button class="nb-use" type="button" data-usegeo>用我的位置</button>';
+    if (!c) {
+      return '<div class="nb-head warn">⚠️ 没设地点，这是<b>全城搜</b>的结果 —— ' +
+             '看不到距离，也算不了路线。' + btn + '</div>';
+    }
+    const where = state.filter.place === 'area' ? state.filter.area : '你的位置';
+    return '<div class="nb-head">按「' + esc(where) + '」附近搜 · ' +
+           (state.filter.place === 'area' ? btn : '') + '</div>';
+  }
+
+  function useMyLocation() {
+    const box = $('#nearby');
+    box.innerHTML = '<p class="empty-note">正在定位…</p>';
+    state.filter.place = 'near';
+    save(KEY.filter, state.filter);
+    locate()
+      .then(() => { renderFilter(); showNearby(); })
+      .catch(() => {
+        box.innerHTML = '<p class="empty-note">定位没成功。<br>' +
+          '可以到上面「筛选条件 → 地点」里选个商圈，一样能算距离和路线。</p>';
+      });
+  }
+
   function showNearby() {
     const box = $('#nearby');
     box.hidden = false;
@@ -433,18 +464,19 @@
     Nearby.search($('#goEat').dataset.kw, $('#goEat').dataset.center, state.filter.range)
       .then((list) => {
         if (!list.length) {
-          box.innerHTML = '<p class="empty-note">附近没搜到，换个范围或者用上面的按钮跳过去看看。</p>';
+          box.innerHTML = nearbyHeader() +
+            '<p class="empty-note">这一带没搜到，换个范围或者用上面的按钮跳过去看看。</p>';
           return;
         }
         shopCache = list;
-        box.innerHTML = list.map((s, i) => {
+        box.innerHTML = nearbyHeader() + list.map((s, i) => {
           const meta = [];
           if (s.rating)   meta.push('⭐ ' + s.rating);
           if (s.cost)     meta.push('人均 ¥' + Math.round(s.cost));
           if (s.distance) meta.push(s.distance < 1000
             ? Math.round(s.distance) + ' m'
             : (s.distance / 1000).toFixed(1) + ' km');
-          const canRoute = s.lng != null && s.lat != null && placeCenter();
+          const canRoute = s.lng != null && s.lat != null;
         return '<div class="shop" data-shop="' + i + '">' +
             '<div class="shop-top"><span class="shop-name">' + esc(s.name) + '</span>' +
               (meta.length ? '<span class="shop-meta">' + esc(meta.join(' · ')) + '</span>' : '') +
@@ -570,7 +602,7 @@
     } else {
       f[st.key] = v;
       save(KEY.filter, f);
-      if (v === 'near') locate();
+      if (v === 'near') locate().catch(() => {});
       renderFilter();
       nextStep();
     }
@@ -1128,7 +1160,7 @@
     pick('#fRange', 'range', (v) => { state.filter.range = Number(v); });
     pick('#fPlace', 'place', (v) => {
       state.filter.place = v;
-      if (v === 'near' && !state.geo) locate();
+      if (v === 'near' && !state.geo) locate().catch(() => {});
     });
 
     $('#areaSel').addEventListener('change', (e) => { state.filter.area = e.target.value; onFilterChange(); });
@@ -1155,6 +1187,7 @@
     });
     $('#copyDish').addEventListener('click', copyDish);
     $('#nearby').addEventListener('click', (e) => {
+      if (e.target.closest('[data-usegeo]')) { useMyLocation(); return; }
       const b = e.target.closest('[data-route]');
       if (b) showRoute(Number(b.dataset.route));
     });
