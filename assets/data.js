@@ -231,9 +231,21 @@ const RANGES = [
 
 /* ================== 跳转到点评 / 高德 / 美团 ==================
  * 不需要任何 key：拼好搜索词直接打开对方的搜索结果页。
- * 手机上会尝试唤起 App，唤不起就退回网页版。
+ *
+ * 三种跳法，按平台和系统选：
+ *   web    —— 网页版，什么时候都能兜底
+ *   app    —— iOS 用的 URL Scheme
+ *   intent —— Android Chrome 用的 intent://，带 browser_fallback_url，
+ *             唤不起 App 会自动跳网页版，比 scheme + 定时器可靠
+ *
+ * 注意：微信内置浏览器会拦掉 scheme 和 intent，只能走网页版（见 app.js）。
  * 链接格式若哪天失效，改这里就行。
  */
+function intentUrl(path, scheme, pkg, fallback) {
+  return 'intent://' + path + '#Intent;scheme=' + scheme + ';package=' + pkg +
+         ';S.browser_fallback_url=' + encodeURIComponent(fallback) + ';end';
+}
+
 const PLATFORMS = [
   {
     k: 'dianping',
@@ -241,23 +253,30 @@ const PLATFORMS = [
     icon: '🔴',
     web: (kw) => 'https://www.dianping.com/search/keyword/' +
                  CITY.dianpingId + '/0_' + encodeURIComponent(kw),
-    app: (kw) => 'dianping://searchshoplist?keyword=' + encodeURIComponent(kw)
+    app: (kw) => 'dianping://searchshoplist?keyword=' + encodeURIComponent(kw),
+    intent: (kw, web) => intentUrl(
+      'searchshoplist?keyword=' + encodeURIComponent(kw),
+      'dianping', 'com.dianping.v1', web)
   },
   {
     k: 'amap',
     label: '高德地图',
     icon: '🗺️',
-    // 高德官方 URI API，PC 打开网页版，手机唤起高德 App
+    // 高德官方 URI API 自己会处理唤起，不用我们拼 scheme
     web: (kw, loc) => 'https://uri.amap.com/search?keyword=' + encodeURIComponent(kw) +
                       '&city=' + encodeURIComponent(CITY.name) +
                       (loc ? '&center=' + loc : '') + '&src=eat-what&coordinate=gaode',
-    app: null
+    app: null,
+    intent: null
   },
   {
     k: 'meituan',
     label: '美团',
     icon: '🟡',
     web: (kw) => 'https://i.meituan.com/s/' + encodeURIComponent(kw),
-    app: (kw) => 'imeituan://www.meituan.com/search?q=' + encodeURIComponent(kw)
+    app: (kw) => 'imeituan://www.meituan.com/search?q=' + encodeURIComponent(kw),
+    intent: (kw, web) => intentUrl(
+      'www.meituan.com/search?q=' + encodeURIComponent(kw),
+      'imeituan', 'com.sankuai.meituan', web)
   }
 ];

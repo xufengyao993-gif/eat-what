@@ -246,24 +246,65 @@
     $('#goEat').dataset.center = center || '';
   }
 
+  const UA = navigator.userAgent;
+  const inWechat = /MicroMessenger/i.test(UA);
+  const isAndroid = /Android/i.test(UA);
+  const isIOS = /iPhone|iPad|iPod/i.test(UA);
+
+  /* 决定该跳哪个地址、用什么方式。抽成纯函数，方便测也方便以后加平台。
+   *   web    微信里：scheme 和 intent 都会被拦，试也白试
+   *   intent Android：自带 browser_fallback_url，唤不起会自己跳网页
+   *   scheme iOS：只能先试，再用定时器兜底回网页
+   *   newtab 桌面浏览器
+   */
+  function platformTarget(pf, kw, center) {
+    const web = pf.web(kw, center);
+    if (inWechat)               return { via: 'web',    url: web };
+    if (isAndroid && pf.intent) return { via: 'intent', url: pf.intent(kw, web) };
+    if (isIOS && pf.app)        return { via: 'scheme', url: pf.app(kw), fallback: web };
+    return { via: 'newtab', url: web };
+  }
+
   function openPlatform(k) {
     const pf = PLATFORMS.find((x) => x.k === k);
     if (!pf) return;
-    const kw = $('#goEat').dataset.kw;
-    const center = $('#goEat').dataset.center;
-    const web = pf.web(kw, center);
+    const t = platformTarget(pf, $('#goEat').dataset.kw, $('#goEat').dataset.center);
 
-    // 手机上先试着唤起 App，唤不起（页面还在）就退回网页版
-    const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    if (mobile && pf.app) {
-      const t = setTimeout(() => { window.location.href = web; }, 1200);
-      document.addEventListener('visibilitychange', function once() {
-        if (document.hidden) clearTimeout(t);          // App 起来了
-        document.removeEventListener('visibilitychange', once);
-      });
-      window.location.href = pf.app(kw);
+    if (t.via === 'newtab') { window.open(t.url, '_blank', 'noopener'); return; }
+
+    // 微信里跳网页版之前先把话说完 —— 立刻跳走的话这句提示一闪而过等于没说
+    if (t.via === 'web' && inWechat) {
+      toast('微信里打不开 App，右上角「···」→ 在浏览器打开');
+      setTimeout(() => { window.location.href = t.url; }, 1400);
+      return;
+    }
+
+    if (t.via === 'scheme') {
+      const timer = setTimeout(() => { window.location.href = t.fallback; }, 1500);
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) clearTimeout(timer);   // App 起来了，页面切到后台
+      }, { once: true });
+    }
+    window.location.href = t.url;
+  }
+
+  // 供自动化测试检查跳转决策，不影响正常使用
+  window.EatWhat = {
+    platformTarget: (k, kw, center) =>
+      platformTarget(PLATFORMS.find((x) => x.k === k), kw, center),
+    env: { inWechat: inWechat, isAndroid: isAndroid, isIOS: isIOS }
+  };
+
+  /* 跳过去搜不对时的兜底：把菜名复制走，自己在 App 里搜 */
+  function copyDish() {
+    if (!state.last) return;
+    const name = state.last.n;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(name)
+        .then(() => toast('已复制「' + name + '」'))
+        .catch(() => copyFallback(name));
     } else {
-      window.open(web, '_blank', 'noopener');
+      copyFallback(name);
     }
   }
 
@@ -390,7 +431,14 @@
     const cnt = $('#wCount');
     cnt.textContent = left ? '候选 ' + left + ' 道' : '这么选没菜了，松一个条件吧';
     cnt.classList.toggle('warn', left === 0);
-    $('#wSkip').textContent = wStep === STEPS.length - 1 ? '开抽 🎲' : '这步随便 ›';
+
+    /* 预算/菜系/口味都是多选，选一个不能就自动翻页，否则没法选第二个。
+       所以让「往下走」这个动作自己显出来：选过东西之后按钮变主色的「下一步」。 */
+    const isLast = wStep === STEPS.length - 1;
+    const picked = st.multi && f[st.key].length > 0;
+    const btn = $('#wSkip');
+    btn.textContent = isLast ? '开抽 🎲' : (picked ? '下一步 ›' : '这步随便 ›');
+    btn.className = 'btn btn-sm ' + (picked || isLast ? 'btn-primary' : 'btn-ghost');
   }
 
   function chooseInStep(v) {
@@ -410,6 +458,29 @@
       renderFilter();
       nextStep();
     }
+  }
+
+  function prevStep() {
+    if (wStep > 0) { wStep--; renderStep(); }
+  }
+
+  /* 左右滑动切换步骤。垂直位移更大时不拦，免得挡住正常滚动。 */
+  function initSwipe() {
+    const el = $('#wizard .sheet-body');
+    let x0 = null, y0 = null;
+    el.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) { x0 = null; return; }
+      x0 = e.touches[0].clientX;
+      y0 = e.touches[0].clientY;
+    }, { passive: true });
+    el.addEventListener('touchend', (e) => {
+      if (x0 === null) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - x0, dy = t.clientY - y0;
+      x0 = null;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+      if (dx < 0) nextStep(); else prevStep();
+    }, { passive: true });
   }
 
   function nextStep() {
@@ -665,9 +736,9 @@
   }
 
   /* 老浏览器 / 非安全上下文下 clipboard API 不可用 */
-  function copyFallback(url) {
+  function copyFallback(text) {
     const ta = document.createElement('textarea');
-    ta.value = url;
+    ta.value = text;
     ta.setAttribute('readonly', '');
     ta.style.cssText = 'position:fixed;top:-9999px';
     document.body.appendChild(ta);
@@ -675,7 +746,7 @@
     let okCopy = false;
     try { okCopy = document.execCommand('copy'); } catch (e) { okCopy = false; }
     document.body.removeChild(ta);
-    toast(okCopy ? '链接已复制，发给朋友吧' : url);
+    toast(okCopy ? '已复制' : text);
   }
 
   // ---------- 设置 ----------
@@ -736,13 +807,14 @@
       if (b) chooseInStep(b.dataset.v);
     });
     $('#wSkip').addEventListener('click', nextStep);
-    $('#wPrev').addEventListener('click', () => { if (wStep > 0) { wStep--; renderStep(); } });
+    $('#wPrev').addEventListener('click', prevStep);
 
     // 去哪吃
     $('#platforms').addEventListener('click', (e) => {
       const b = e.target.closest('[data-plat]');
       if (b) openPlatform(b.dataset.plat);
     });
+    $('#copyDish').addEventListener('click', copyDish);
     $('#nearbyBtn').addEventListener('click', () => {
       const box = $('#nearby');
       if (!box.hidden) { box.hidden = true; return; }
@@ -850,4 +922,5 @@
   bind();
   syncButtons();
   initShake();
+  initSwipe();
 })();

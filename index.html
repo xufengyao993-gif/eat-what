@@ -105,7 +105,10 @@
     <div id="goEat" class="panel go-eat" hidden>
       <div class="go-head">
         <span class="field-label" id="goTitle">去哪吃</span>
-        <button id="nearbyBtn" class="text-btn" type="button">看附近的店 ›</button>
+        <div class="go-tools">
+          <button id="copyDish" class="text-btn" type="button">复制菜名</button>
+          <button id="nearbyBtn" class="text-btn" type="button">看附近的店 ›</button>
+        </div>
       </div>
       <div id="platforms" class="platforms"></div>
       <div id="nearby" class="nearby" hidden></div>
@@ -174,6 +177,7 @@
       <span id="wCount" class="pool-count">候选 0 道</span>
       <button id="wSkip" class="btn btn-ghost btn-sm" type="button">这步随便</button>
     </div>
+    <p class="swipe-hint">可以多选 · 左右滑动也能翻页</p>
   </div>
 </div>
 
