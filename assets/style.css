@@ -424,3 +424,13 @@ main { max-width: 560px; margin: 0 auto; padding: 14px 14px 24px; }
 .go-section:first-of-type { margin-top: 0; }
 .go-label { font-size: 12px; font-weight: 700; color: var(--fg-mute); margin-bottom: 8px; }
 .plat-hint { font-size: 10px; color: var(--fg-mute); line-height: 1.3; text-align: center; }
+
+/* 加菜 / 加店 切换 */
+.add-kind { display: flex; gap: 8px; margin-bottom: 10px; }
+.ak {
+  flex: 1; padding: 9px; border-radius: 11px;
+  border: 1.5px solid var(--line); background: transparent;
+  font-size: 14px; cursor: pointer; transition: .15s;
+}
+.ak.on { border-color: var(--brand); background: var(--brand-soft); font-weight: 700; }
+.ak:active { transform: scale(.97); }

@@ -213,7 +213,7 @@
     const t = [d.c, '人均 ' + ((PRICES.find((p) => p.k === d.p) || {}).label || '')];
     if (d.s > 0) t.push((SPICY.find((s) => s.k === d.s) || {}).label);
     if (d.v) t.push('清淡');
-    if (d.b) t.push('连锁店');
+    if (d.b) t.push('是家店');
     return t.filter(Boolean);
   }
 
@@ -353,17 +353,6 @@
     // 外卖平台按你自己的收货地址算配送范围，搜索词带上商圈反而搜不到
     const kw = state.last ? state.last.n : '';
 
-    // 淘宝闪购、京东外卖都是 App 内的频道，没法直达搜索，
-    // 那就先把菜名复制好，省得进去还要自己打字
-    if (pf.copyFirst) {
-      const done = () => toast('已复制「' + kw + '」，' + (pf.hint || '进去粘贴搜索'));
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(kw).then(done).catch(done);
-      } else {
-        copyFallback(kw);
-      }
-    }
-
     const t = platformTarget(pf, kw, '');
     if (t.via === 'newtab') { window.open(t.url, '_blank', 'noopener'); return; }
     if (t.via === 'web' && inWechat) {
@@ -377,8 +366,7 @@
         if (document.hidden) clearTimeout(timer);
       }, { once: true });
     }
-    // 复制那条路要留点时间让提示看得见
-    setTimeout(() => { window.location.href = t.url; }, pf.copyFirst ? 900 : 0);
+    window.location.href = t.url;
   }
 
   function openPlatform(k) {
@@ -967,6 +955,19 @@
     $('#edSpicy').innerHTML = SPICY.map((s) => '<option value="' + s.k + '">' + s.label + '</option>').join('');
   }
 
+  let addKind = 'dish';        // dish=一道菜  brand=一家店
+
+  function setAddKind(k) {
+    addKind = k;
+    document.querySelectorAll('[data-kind]').forEach((b) =>
+      b.classList.toggle('on', b.dataset.kind === k));
+    const dish = k === 'dish';
+    $('#addName').placeholder = dish ? '比如：油焖大虾' : '比如：巨鹿路那家生煎';
+    $('#addHint').textContent = dish
+      ? '加完可以点进去补上在哪家店吃的、好不好吃。'
+      : '加完可以点进去补上位置、评分和评价。抽到店时会直接搜这家店。';
+  }
+
   function addDish(e) {
     e.preventDefault();
     const name = $('#addName').value.trim();
@@ -975,16 +976,22 @@
       toast('「' + name + '」已经在菜单里了');
       return;
     }
-    state.custom.push({
+    const isBrand = addKind === 'brand';
+    const item = {
       id: 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1000),
-      n: name, e: '🍽️', c: $('#addCat').value, m: 'bldn',
+      n: name, e: isBrand ? '🏪' : '🍽️', c: $('#addCat').value, m: 'bldn',
       p: Number($('#addPrice').value), s: Number($('#addSpicy').value), v: false
-    });
+    };
+    if (isBrand) {
+      item.b = true;
+      item.shop = name;        // 是店的话，名字本身就是店名，跳转时直接拿来搜
+    }
+    state.custom.push(item);
     save(KEY.custom, state.custom);
     $('#addName').value = '';
     renderMenu();
     renderFilter();
-    toast('加好了：' + name);
+    toast((isBrand ? '加好了这家店：' : '加好了：') + name);
   }
 
   // ---------- 杂项 ----------
@@ -1261,6 +1268,10 @@
 
     // 菜单
     $('#addForm').addEventListener('submit', addDish);
+    $('#addKind').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-kind]');
+      if (b) setAddKind(b.dataset.kind);
+    });
     $('#search').addEventListener('input', renderMenu);
     $('#restoreBtn').addEventListener('click', () => {
       if (!confirm('恢复默认菜单？\n自己加的菜、改过的内容、店名评价都会没掉，删掉的默认菜会回来。\n吃饭记录保留。')) return;
@@ -1388,6 +1399,7 @@
   // ---------- 启动 ----------
   applyTheme(load(KEY.theme, null));
   fillSelects();
+  setAddKind('dish');
   renderFilter();
   renderHistory();
   bind();

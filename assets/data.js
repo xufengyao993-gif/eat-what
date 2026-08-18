@@ -375,13 +375,8 @@ function intentUrl(path, scheme, pkg, fallback) {
 }
 
 /* ---- 点外卖 ----
- * 三家能做到的程度差很多：
- *   美团外卖  有明确的搜索 scheme，能带着菜名直达
- *   淘宝闪购  是淘宝 App 里的频道，没有独立入口。跳通用淘宝搜索会
- *             搜出速冻食品之类的电商结果，反而是错的，所以只把菜名
- *             复制好再打开 App，让人自己进闪购粘贴
- *   京东外卖  同上，也是 App 内频道
- * copyFirst: true 的表示走「复制菜名 + 打开 App」这条路。
+ * 淘宝闪购就是原来的饿了么 App，2025 年 12 月改的名，所以走 eleme:// 这套。
+ * 链接格式若哪天失效，改这里就行。
  */
 const DELIVERY = [
   {
@@ -398,22 +393,11 @@ const DELIVERY = [
     k: 'tbsg',
     label: '淘宝闪购',
     icon: '🧡',
-    copyFirst: true,
-    hint: '进「闪购」后粘贴搜索',
-    web: () => 'https://main.m.taobao.com/',
-    app: () => 'taobao://',
-    intent: (kw, web) => intentUrl('', 'taobao', 'com.taobao.taobao', web)
-  },
-  {
-    k: 'jddj',
-    label: '京东外卖',
-    icon: '🔴',
-    copyFirst: true,
-    hint: '进「外卖」后粘贴搜索',
-    web: () => 'https://m.jd.com/',
-    app: () => 'openapp.jdmobile://virtual?params=' +
-               encodeURIComponent('{"category":"jump","des":"m","url":"https://m.jd.com/"}'),
-    intent: (kw, web) => intentUrl('', 'openapp.jdmobile', 'com.jingdong.app.mall', web)
+    web: (kw) => 'https://h5.ele.me/search/?keyword=' + encodeURIComponent(kw),
+    app: (kw) => 'eleme://search?keyword=' + encodeURIComponent(kw),
+    intent: (kw, web) => intentUrl(
+      'search?keyword=' + encodeURIComponent(kw),
+      'eleme', 'me.ele', web)
   }
 ];
 

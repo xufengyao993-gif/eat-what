@@ -141,9 +141,13 @@
   <!-- ============ 菜单 ============ -->
   <section id="view-menu" class="view">
     <div class="panel">
-      <div class="field-label">添加自己的菜</div>
+      <div class="field-label">添加</div>
+      <div id="addKind" class="add-kind" role="group" aria-label="加菜还是加店">
+        <button class="ak on" type="button" data-kind="dish">🍽️ 一道菜</button>
+        <button class="ak" type="button" data-kind="brand">🏪 一家店</button>
+      </div>
       <form id="addForm" class="add-form" autocomplete="off">
-        <input id="addName" class="input" type="text" placeholder="比如：巨鹿路那家生煎" maxlength="20" required>
+        <input id="addName" class="input" type="text" placeholder="比如：油焖大虾" maxlength="20" required>
         <div class="add-row">
           <select id="addCat" class="select" aria-label="菜系"></select>
           <select id="addPrice" class="select" aria-label="预算"></select>
@@ -151,6 +155,7 @@
         </div>
         <button class="btn btn-primary btn-sm" type="submit">添加</button>
       </form>
+      <p id="addHint" class="hint block mt8"></p>
     </div>
 
     <div class="panel">
