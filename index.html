@@ -270,6 +270,26 @@
     <p class="hint block">
       大众点评和美团没有对个人开发者开放的接口，所以「去哪吃」用的是跳转到它们 App/网页搜索结果的方式。
     </p>
+
+    <div class="ed-divider">备份与恢复</div>
+    <p class="hint block">
+      你的菜单和记录只存在这台设备的浏览器里。关浏览器不会丢，但<b>清缓存、换手机会丢</b>；
+      iPhone 上如果超过 7 天没打开，Safari 也可能自动清掉 ——
+      把网页「添加到主屏幕」可以避开这条，重要的记录还是定期导一份出来稳妥。
+    </p>
+    <div class="add-row">
+      <button id="expCopy" class="btn btn-ghost btn-sm" type="button">复制备份</button>
+      <button id="expFile" class="btn btn-ghost btn-sm" type="button">存成文件</button>
+    </div>
+    <p class="hint block mt8">
+      「复制备份」之后，粘到微信收藏或备忘录里就存住了。换设备时把那段内容粘回下面这个框。
+    </p>
+    <textarea id="impText" class="input ed-note" rows="3" placeholder="把备份内容粘到这里，然后点「恢复」"></textarea>
+    <div class="add-row mt8">
+      <button id="impBtn" class="btn btn-primary btn-sm" type="button">恢复</button>
+      <button id="impPick" class="btn btn-ghost btn-sm" type="button">从文件恢复</button>
+    </div>
+    <input id="impFile" type="file" accept="application/json,.json" hidden>
   </div>
 </div>
 

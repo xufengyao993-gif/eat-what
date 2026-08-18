@@ -914,6 +914,98 @@
     toast(okCopy ? '已复制' : text);
   }
 
+  // ---------- 备份与恢复 ----------
+  /* 记录只存在本机浏览器里，清缓存/换设备就没了。
+     导出成一段 JSON，粘到微信收藏或存成文件都行。 */
+  function exportText() {
+    return JSON.stringify({
+      app: 'eat-what',
+      v: 1,
+      at: new Date().toISOString(),
+      custom: state.custom,
+      edits: state.edits,
+      deleted: state.del,
+      off: state.off,
+      history: state.hist,
+      filter: state.filter
+    });
+  }
+
+  function exportCopy() {
+    const t = exportText();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(t)
+        .then(() => toast('备份已复制，粘到微信收藏里存着'))
+        .catch(() => copyFallback(t));
+    } else {
+      copyFallback(t);
+    }
+  }
+
+  function exportFile() {
+    const d = new Date();
+    const stamp = d.getFullYear() + '-' +
+                  String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                  String(d.getDate()).padStart(2, '0');
+    const blob = new Blob([exportText()], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    // 用英文名：中文文件名在部分浏览器上会被忽略，跨系统传输也容易乱码
+    a.download = 'eat-what-backup-' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('已导出，注意别把文件弄丢了');
+  }
+
+  function importFrom(text) {
+    let d;
+    try { d = JSON.parse(text); }
+    catch (e) { toast('这段内容读不出来，是不是复制得不全？'); return; }
+
+    if (!d || d.app !== 'eat-what') { toast('这不像是「今天吃啥」的备份'); return; }
+
+    const n = (Array.isArray(d.custom) ? d.custom.length : 0) +
+              (d.edits ? Object.keys(d.edits).length : 0);
+    if (!confirm('用这份备份覆盖现在的记录？\n' +
+                 '备份里有 ' + n + ' 条菜单改动、' +
+                 (Array.isArray(d.history) ? d.history.length : 0) + ' 条吃饭记录。\n' +
+                 '这台设备上现在的内容会被替换掉。')) return;
+
+    state.custom = Array.isArray(d.custom) ? d.custom : [];
+    state.edits  = (d.edits && typeof d.edits === 'object' && !Array.isArray(d.edits)) ? d.edits : {};
+    state.del    = Array.isArray(d.deleted) ? d.deleted : [];
+    state.off    = Array.isArray(d.off) ? d.off : [];
+    state.hist   = Array.isArray(d.history) ? d.history : [];
+    if (d.filter && typeof d.filter === 'object') {
+      state.filter = Object.assign(freshFilter(), d.filter);
+    }
+
+    save(KEY.custom, state.custom);
+    save(KEY.edits, state.edits);
+    save(KEY.del, state.del);
+    save(KEY.off, state.off);
+    save(KEY.hist, state.hist);
+    save(KEY.filter, state.filter);
+
+    state.last = null;
+    $('#goEat').hidden = true;
+    resultEl.className = 'result is-idle';
+    emojiEl.textContent = '🍽️';
+    nameEl.textContent = '点下面的按钮';
+    tagsEl.innerHTML = '';
+    syncButtons();
+
+    $('#impText').value = '';
+    closeSheet('settings');
+    renderFilter();
+    renderMenu();
+    renderHistory();
+    toast('恢复好了');
+  }
+
   // ---------- 设置 ----------
   function openSettings() {
     const c = Nearby.conf() || {};
@@ -1056,6 +1148,24 @@
       renderFilter();
       toast('保存好了，抽完就能看附近的店');
     });
+    $('#expCopy').addEventListener('click', exportCopy);
+    $('#expFile').addEventListener('click', exportFile);
+    $('#impBtn').addEventListener('click', () => {
+      const t = $('#impText').value.trim();
+      if (!t) { toast('先把备份内容粘进来'); return; }
+      importFrom(t);
+    });
+    $('#impPick').addEventListener('click', () => $('#impFile').click());
+    $('#impFile').addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => importFrom(String(r.result));
+      r.onerror = () => toast('文件读不出来');
+      r.readAsText(f);
+      e.target.value = '';        // 同一个文件能再选一次
+    });
+
     $('#clearKey').addEventListener('click', () => {
       Nearby.setConf(null);
       $('#amapKey').value = ''; $('#amapCode').value = '';
