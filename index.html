@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<title>今天吃啥 · 帮你做决定</title>
-<meta name="description" content="纠结吃什么的时候，随机帮你决定一顿饭。">
+<title>今天吃啥 · 上海</title>
+<meta name="description" content="纠结吃什么的时候，随机帮你决定一顿饭，并直接找到附近的店。">
 <meta name="theme-color" content="#ff6b35">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
@@ -15,12 +15,24 @@
 
 <header class="topbar">
   <h1 class="brand">今天吃啥<span class="brand-dot">?</span></h1>
-  <button id="themeBtn" class="icon-btn" type="button" aria-label="切换深浅色">🌙</button>
+  <div class="top-actions">
+    <button id="setBtn" class="icon-btn" type="button" aria-label="设置">⚙️</button>
+    <button id="themeBtn" class="icon-btn" type="button" aria-label="切换深浅色">🌙</button>
+  </div>
 </header>
 
 <main>
   <!-- ============ 抽菜 ============ -->
   <section id="view-pick" class="view is-active">
+
+    <button id="wizardBtn" class="wizard-entry" type="button">
+      <span class="we-emoji">🤔</span>
+      <span class="we-text">
+        <strong>一步步帮我选</strong>
+        <small>预算 → 菜系 → 口味 → 地点</small>
+      </span>
+      <span class="we-go">›</span>
+    </button>
 
     <div class="panel">
       <button id="filterToggle" class="filter-head" type="button" aria-expanded="false" aria-controls="filterBody">
@@ -35,16 +47,27 @@
           <div id="fMeal" class="chips" role="group" aria-label="餐别"></div>
         </div>
         <div class="field">
-          <div class="field-label">口味分类<span class="hint">不选＝全部</span></div>
-          <div id="fCat" class="chips" role="group" aria-label="分类"></div>
+          <div class="field-label">预算<span class="hint">按人均</span></div>
+          <div id="fPrice" class="chips" role="group" aria-label="预算"></div>
         </div>
         <div class="field">
-          <div class="field-label">价位</div>
-          <div id="fPrice" class="chips" role="group" aria-label="价位"></div>
+          <div class="field-label">菜系<span class="hint">不选＝全部</span></div>
+          <div id="fCat" class="chips" role="group" aria-label="菜系"></div>
         </div>
         <div class="field">
-          <div class="field-label">辣度</div>
+          <div class="field-label">口味</div>
           <div id="fSpicy" class="chips" role="group" aria-label="辣度"></div>
+        </div>
+        <div class="field">
+          <div class="field-label">地点<span class="hint">用来找店，不影响抽到哪道菜</span></div>
+          <div id="fPlace" class="chips" role="group" aria-label="地点"></div>
+          <div id="areaWrap" class="area-wrap" hidden>
+            <select id="areaSel" class="select" aria-label="选择商圈"></select>
+          </div>
+          <div id="rangeWrap" class="range-wrap" hidden>
+            <div id="fRange" class="chips" role="group" aria-label="范围"></div>
+            <p id="geoStatus" class="hint block"></p>
+          </div>
         </div>
         <div class="switches">
           <label class="switch">
@@ -76,6 +99,16 @@
       </div>
       <p id="tip" class="tip">摇一摇手机也能抽（部分手机需授权）</p>
     </div>
+
+    <!-- 去哪吃 -->
+    <div id="goEat" class="panel go-eat" hidden>
+      <div class="go-head">
+        <span class="field-label" id="goTitle">去哪吃</span>
+        <button id="nearbyBtn" class="text-btn" type="button">看附近的店 ›</button>
+      </div>
+      <div id="platforms" class="platforms"></div>
+      <div id="nearby" class="nearby" hidden></div>
+    </div>
   </section>
 
   <!-- ============ 菜单 ============ -->
@@ -83,10 +116,10 @@
     <div class="panel">
       <div class="field-label">添加自己的菜</div>
       <form id="addForm" class="add-form" autocomplete="off">
-        <input id="addName" class="input" type="text" placeholder="比如：楼下的黄焖鸡" maxlength="20" required>
+        <input id="addName" class="input" type="text" placeholder="比如：巨鹿路那家生煎" maxlength="20" required>
         <div class="add-row">
-          <select id="addCat" class="select" aria-label="分类"></select>
-          <select id="addPrice" class="select" aria-label="价位"></select>
+          <select id="addCat" class="select" aria-label="菜系"></select>
+          <select id="addPrice" class="select" aria-label="预算"></select>
           <select id="addSpicy" class="select" aria-label="辣度"></select>
         </div>
         <button class="btn btn-primary btn-sm" type="submit">添加</button>
@@ -124,9 +157,58 @@
   <button class="tab" data-view="history" role="tab" type="button"><span>🕘</span>记录</button>
 </nav>
 
+<!-- ============ 引导式选择 ============ -->
+<div id="wizard" class="sheet" hidden>
+  <div class="sheet-mask" data-close="wizard"></div>
+  <div class="sheet-body">
+    <div class="sheet-head">
+      <button id="wPrev" class="text-btn" type="button">‹ 上一步</button>
+      <div id="wDots" class="dots"></div>
+      <button class="text-btn" type="button" data-close="wizard">关闭</button>
+    </div>
+    <h2 id="wTitle" class="w-title">先定个预算</h2>
+    <p id="wSub" class="w-sub">人均大概多少？</p>
+    <div id="wOptions" class="w-options"></div>
+    <div class="sheet-foot">
+      <span id="wCount" class="pool-count">候选 0 道</span>
+      <button id="wSkip" class="btn btn-ghost btn-sm" type="button">这步随便</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 设置 ============ -->
+<div id="settings" class="sheet" hidden>
+  <div class="sheet-mask" data-close="settings"></div>
+  <div class="sheet-body">
+    <div class="sheet-head">
+      <strong>设置</strong>
+      <button class="text-btn" type="button" data-close="settings">关闭</button>
+    </div>
+    <div class="field">
+      <div class="field-label">高德地图 Key<span class="hint">选填</span></div>
+      <p class="hint block">
+        填了之后可以在应用里直接看附近餐厅的评分、人均和距离。
+        去 <a href="https://lbs.amap.com/" target="_blank" rel="noopener">高德开放平台</a>
+        免费注册，创建「Web端(JS API)」类型的 Key，把 Key 和安全密钥填在这里。
+        只存在你自己的浏览器里，不会上传。
+      </p>
+      <input id="amapKey" class="input" type="text" placeholder="Key" autocomplete="off">
+      <input id="amapCode" class="input mt8" type="text" placeholder="安全密钥 securityJsCode" autocomplete="off">
+      <div class="add-row mt8">
+        <button id="saveKey" class="btn btn-primary btn-sm" type="button">保存</button>
+        <button id="clearKey" class="btn btn-ghost btn-sm" type="button">清除</button>
+      </div>
+    </div>
+    <p class="hint block">
+      大众点评和美团没有对个人开发者开放的接口，所以「去哪吃」用的是跳转到它们 App/网页搜索结果的方式。
+    </p>
+  </div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <script src="assets/data.js"></script>
+<script src="assets/nearby.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>
