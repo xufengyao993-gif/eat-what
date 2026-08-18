@@ -169,7 +169,8 @@ assets/
   app.js                主逻辑（引导流程、筛选、加权抽取、菜单、记录）
   nearby.js             高德附近搜索（可选，没配 Key 就不加载）
   style.css             样式，含深浅色主题
-  icon.svg              图标（浏览器标签页用）
-  apple-touch-icon.png  iOS 桌面图标，Safari 不认 SVG 必须是 PNG
+  bear.png              图标原图
+  apple-touch-icon.png  iOS 桌面图标（Safari 不认 SVG，必须 PNG）
+  favicon-32.png        浏览器标签页
   icon-192.png / icon-512.png / icon-maskable-512.png
 ```
